@@ -1,81 +1,124 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: CloudFormation template to create EC2 instance with security group
-
 Parameters:
   LatestAmiId:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: /aws/service/ami-amazon-linux-latest/al2023-ami-minimal-kernel-default-x86_64
-
 Resources:
   MyVPC:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: 10.0.0.0/28
+      CidrBlock: 10.0.0.0/16
       EnableDnsSupport: true
       EnableDnsHostnames: true
-
-  PrivateSubnet:
+  PublicSubnet:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref MyVPC
+      VpcId:
+        Ref: MyVPC
       CidrBlock: 10.0.0.0/28
-      AvailabilityZone: us-east-1f
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: sa-east-1a
+  # Internet Gateway definition (to allow internet access)
+  MyInternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  # Attach Internet Gateway to VPC
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties: 
+      VpcId: 
+        Ref: MyVPC
+      InternetGatewayId: 
+        Ref: MyInternetGateway
+
+  # Route table for public subnet
+  MyRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:
+        Ref: MyVPC
+  MyRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: 
+        Ref: MyRouteTable
+      DestinationCidrBlock: 18.228.70.32/29
+      GatewayId: 
+        Ref: MyInternetGateway
+  
+  # Associate Route Table with Subnet
+  SubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PublicSubnet
+      RouteTableId:
+        Ref: MyRouteTable
+
+  # Security group that allows SSH and HTTP
+  ServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow SSH and HTTP access
+      VpcId:
+        Ref: MyVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 18.228.70.32/29
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 18.228.70.32/29
+  
+  NewKeyPair:
+    Type: 'AWS::EC2::KeyPair'
+    Properties:
+      KeyName: MyKeyPair
+      KeyType: ed25519
 
   MyInstance:
     Type: AWS::EC2::Instance
     Properties:
-      AvailabilityZone: us-east-1f
-      ImageId: !Ref LatestAmiId
+      AvailabilityZone: sa-east-1a
+      ImageId:
+        Ref: LatestAmiId
+      KeyName: 
+        Ref: NewKeyPair
       InstanceType: t2.micro
-      SubnetId: !Ref PrivateSubnet
-      SecurityGroupIds: [{ "Fn::GetAtt" : ["ServerSecurityGroup", "GroupId"] }]
-      UserData: 
-        Fn::Base64: !Sub |
-          sudo yum update -y
-          sudo yum install -y aws-cfn-bootstrap
-          sudo /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource MyInstance --configsets Install
-
+      SubnetId:
+        Ref: PublicSubnet
+      SecurityGroupIds:
+        - Ref: ServerSecurityGroup
+      UserData:
+        Fn::Base64:
+          Fn::Sub: "sudo yum update -y\nsudo yum install -y aws-cfn-bootstrap\nsudo\
+            \ /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource MyInstance\
+            \ --configsets Install\n"
     Metadata:
       AWS::CloudFormation::Init:
         configsets:
           Install:
-            - packages:
-                yum:
-                  python3: []
-                  python3-pip: []
-            - commands:
-                01_install_pytorch:
-                  command: |
-                    pip3 install torch torchvision torchaudio
-                02_install_yfinance:
-                  command: |
-                    pip3 install yfinance
-                03_install_pandas:
-                  command: |
-                    pip3 install pandas
-                04_install_numpy:
-                  command: |
-                    pip3 install numpy
-                05_install_pyspark:
-                  command: |
-                    pip3 install pyspark
+          - packages:
+              yum:
+                python3: []
+                python3-pip: []
+          - commands:
+              01_install_pytorch:
+                command: "pip3 install torch torchvision torchaudio\n"
+              02_install_yfinance:
+                command: "pip3 install yfinance\n"
+              03_install_pandas:
+                command: "pip3 install pandas\n"
+              04_install_numpy:
+                command: "pip3 install numpy\n"
+              05_install_pyspark:
+                command: "pip3 install pyspark\n"
         config:
           packages:
             yum:
               python3: []
               python3-pip: []
-
-  ServerSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Allow connections from specified CIDR ranges
-      VpcId: !Ref MyVPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 10.0.0.0/28  # Adjust this to your specific IP range if needed
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: 10.0.0.0/28  # Adjust this to your specific IP range if needed
+ 
