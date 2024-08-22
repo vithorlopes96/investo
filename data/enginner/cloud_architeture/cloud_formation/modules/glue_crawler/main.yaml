@@ -1,0 +1,42 @@
+
+---
+AWSTemplateFormatVersion: '2010-09-09'
+# Sample CFN YAML to demonstrate creating a crawler
+#
+# Parameters section contains names that are substituted in the Resources section
+# These parameters are the names the resources created in the Data Catalog
+Parameters:                                                                                                       
+# The name of the crawler to be created
+  CFNCrawlerName:  
+    Type: String
+    Default: cfn-investo-stocks-1
+  CFNDatabaseName:
+    Type: String
+    Default: !Ref CFNDatabaseName
+  CFNTablePrefixName:
+    Type: String
+    Default: cfn_sample_1_	
+#
+#
+# Resources section defines metadata for the Data Catalog
+Resources:
+
+ #Create a crawler to crawl the flights data on a public S3 bucket
+  CFNCrawlerFlights:
+    Type: AWS::Glue::Crawler
+    Properties:
+      Name: !Ref CFNCrawlerName
+      Role: !GetAtt CFNRoleStocks.Arn
+      #Classifiers: none, use the default classifier
+      Description: AWS Glue crawler to crawl flights data
+      #Schedule: none, use default run-on-demand
+      DatabaseName: !Ref CFNDatabaseName
+      Targets:
+        S3Targets:
+          # Public S3 bucket with the flights data
+          - Path: "s3://crawler-public-sa-east-1/investo/stocks/"
+      TablePrefix: !Ref CFNTablePrefixName
+      SchemaChangePolicy:
+        UpdateBehavior: "UPDATE_IN_DATABASE"
+        DeleteBehavior: "LOG"
+      Configuration: "{\"Version\":1.0,\"CrawlerOutput\":{\"Partitions\":{\"AddOrUpdateBehavior\":\"InheritFromTable\"},\"Tables\":{\"AddOrUpdateBehavior\":\"MergeNewColumns\"}}}"

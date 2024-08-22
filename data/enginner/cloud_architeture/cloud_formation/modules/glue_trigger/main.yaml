@@ -1,0 +1,33 @@
+
+---
+AWSTemplateFormatVersion: '2010-09-09'
+# Sample CFN YAML to demonstrate creating an on-demand trigger
+#
+# Parameters section contains names that are substituted in the Resources section
+# These parameters are the names the resources created in the Data Catalog
+Parameters:
+  # The existing job to be started by this trigger 
+  CFNJobName:
+    Type: String
+    Default: cfn-job-S3-to-S3-1
+  # The name of the trigger to be created
+  CFNTriggerName:
+    Type: String
+    Default: cfn-trigger-ondemand-flights-1	
+#
+# Resources section defines metadata for the Data Catalog
+# Sample CFN YAML to demonstrate creating an on-demand trigger for a job	
+Resources:                                      
+# Create trigger to run an existing job (CFNJobName) on an on-demand schedule.	
+  CFNTriggerSample:
+    Type: AWS::Glue::Trigger   
+    Properties:
+      Name:
+        Ref: CFNTriggerName		
+      Description: Trigger created with CloudFormation
+      Type: ON_DEMAND                                                        	   
+      Actions:
+        - JobName: !Ref CFNJobName                	  
+        # Arguments: JSON object
+      #Schedule: 
+      #Predicate: 

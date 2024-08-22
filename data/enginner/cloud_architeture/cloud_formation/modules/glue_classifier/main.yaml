@@ -1,0 +1,23 @@
+
+---
+AWSTemplateFormatVersion: '2010-09-09'
+# Sample CFN YAML to demonstrate creating a JSON classifier
+#
+# Parameters section contains names that are substituted in the Resources section
+# These parameters are the names the resources created in the Data Catalog
+Parameters:                                                                                                       
+# The name of the classifier to be created
+  CFNClassifierName:  
+    Type: String
+    Default: cfn-classifier-csv-one-column-1                                                               	
+#
+#
+# Resources section defines metadata for the Data Catalog
+Resources:
+# Create classifier that uses a JSON pattern.	
+  CFNClassifierFlights:
+    Type: AWS::Glue::Classifier   
+    Properties:
+       CsvClassifier:
+        #CSV classifier		
+        Name: !Ref CFNClassifierName

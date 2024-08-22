@@ -1,0 +1,13 @@
+ CFNInvestoTables:
+    # Creating the table waits for the database to be created
+    DependsOn: CFNDatabaseName
+    Type: AWS::Glue::Table
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseName: !Ref CFNDatabaseName
+      TableInput:
+        Name: !Ref investostocktable
+        TableType: GOVERNED
+        Parameters: {
+    "classification": "csv"
+  }

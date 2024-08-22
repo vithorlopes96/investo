@@ -1,0 +1,76 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation template to create a Lambda function that extracts data from Yahoo Finance and saves it to an S3 bucket.
+
+Resources:
+  PipLayerLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+                - s3.amazonaws.com
+      Policies:
+        - PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+                - efs:ClientMount
+                - efs:ClientWrite
+                - efs:ClientRead
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+                - ec2:DescribeNetworkInterfaces
+                - ec2:CreateNetworkInterface
+                - ec2:DeleteNetworkInterface
+                - ec2:DescribeInstances
+                - ec2:AttachNetworkInterface
+                Effect: Allow
+                Resource:
+                  - "*"
+          PolicyName: lambda
+
+  PythonExtractData:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}"
+      VpcConfig:
+        SecurityGroupIds:
+          - !ImportValue SecurityGroupIdExport
+        SubnetIds:
+          - !ImportValue SubnetId1Export
+      Handler: index.handler
+      MemorySize: 1024
+      Role: !GetAtt PipLayerLambdaRole.Arn
+      Runtime: python3.12
+      Timeout: 300
+      Code:
+        ZipFile: |
+          import pandas as pd
+          import yfinance as yf
+
+              def extract_closed_prices():
+                  try:
+                      for i in stocks:
+                          msft = yf.Ticker(i)
+                          data_temp = msft.history(period="1y")
+                          df_fin  = pd.concat([df_fin,data_temp])
+                          
+                      df_fin = df_fin.reset_index()
+                      print(df_fin)
+                  except Exception as e:
+                      raise ValueError(f"Extraction failed: {e}")
+                  return df_fin
+      FileSystemConfigs:
+        # - Arn: arn:aws:elasticfilesystem:sa-east-1:022499023254:access-point/fsap-0ba24918b9c97d91c
+        - Arn: !ImportValue LambdaArnExport
+          LocalMountPath: /mnt/access
