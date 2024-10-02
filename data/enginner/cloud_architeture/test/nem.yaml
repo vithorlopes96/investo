@@ -1,0 +1,118 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation template to create an EC2 instance with a specified Key Pair and security group, and to mount EFS.
+
+Parameters:
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-minimal-kernel-default-x86_64
+  
+Resources:
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow                
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+                - s3.amazonaws.com
+      Policies:
+        - PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Action:
+                - s3:PutObject
+                - s3:GetObject
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+                - efs:ClientMount
+                - efs:ClientWrite
+                - efs:ClientRead
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+                - ec2:DescribeNetworkInterfaces
+                - ec2:CreateNetworkInterface
+                - ec2:DeleteNetworkInterface
+                - ec2:DescribeInstances
+                - ec2:AttachNetworkInterface
+                Effect: Allow
+                Resource:
+                  - "*"
+          PolicyName: ec2-investo-lambda-packages-update
+
+  EC2InstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Roles: 
+        - !Ref InstanceRole          
+  
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group to allow NFS - Lambda communication.
+      VpcId: !ImportValue VPCIdExport
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+
+  NewKeyPair:
+    Type: 'AWS::EC2::KeyPair'
+    Properties:
+      KeyName: mykeypair
+      KeyType: rsa
+  
+  MyInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      AvailabilityZone: sa-east-1a
+      ImageId: !Ref LatestAmiId
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      KeyName: !Ref NewKeyPair  # Reference the existing key pair name
+      InstanceType: t2.micro
+      SubnetId: 
+        - !ImportValue PublicSubnet
+      SecurityGroupIds: 
+        - !Ref InstanceSecurityGroup
+        UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          sudo su
+          yum update -y
+          yum install -y nfs-utils python3-pip zip
+          mkdir -p /mnt/lambda_packages
+          mount -t nfs4 -o nfsvers=4.1 ${EFSAccessPointArn}:/ /mnt/lambda_packages
+          pip3 install --target=/mnt/lambda_packages yfinance pyspark
+          cd /mnt/lambda_packages
+          zip lambda-packages-yfinance.zip .
+          ACCESS_POINT_ARN="arn:aws:s3:${AWS::Region}:${AWS::AccountId}:accesspoint/${S3AccessPointArn}"
+          aws s3 cp lambda-packages-yfinance.zip s3://${ACCESS_POINT_NAME}/
+      ...
+  
+  EFSAccessPointArn:
+    Fn::ImportValue: AccessPointArnExport
+  
+  S3AccessPointArn:
+    Fn::ImportValue: S3AccessPointArn
+  
+
+Outputs:
+  InstanceId:
+    Value: !Ref MyInstance
+    Export:
+      Name: InstanceIdExport
