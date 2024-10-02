@@ -1,0 +1,12 @@
+# Dockerfile.processor
+FROM python:3.9-slim
+
+# Set the working directory
+WORKDIR /app
+
+
+# Install required packages
+RUN pip install pandas
+
+# Define the command to run the processor script
+CMD ["python", "processor.py"]
