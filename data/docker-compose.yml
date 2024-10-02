@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  processor:
+    build:
+      context: .
+      dockerfile: Dockerfile.processor
+    volumes:
+      - data:/data  # Mount the volume to save output.csv
+
+  consumer:
+    image: python:3.9-slim
+    volumes:
+      - data:/data  # Mount the same volume to access the output
+    command: >
+      sh -c "apt-get update && apt-get install -y python3-pandas && 
+      python3 -c 'print("hello world")'"
+
+volumes:
+  data:  # Define a named volume
